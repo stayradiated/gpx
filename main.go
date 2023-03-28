@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/mitchellh/cli"
@@ -11,10 +14,14 @@ import (
 	"github.com/stayradiated/gpx/truncate"
 )
 
+func coordsAction() (cli.Command, error) {
+	return &coordsCommand{}, nil
+}
+
 type coordsCommand struct{}
 
 func (c *coordsCommand) Help() string {
-	return "Extract coordinates from a GPX file"
+  return "Usage: gpx json-coords [FILENAME]"
 }
 
 func (c *coordsCommand) Synopsis() string {
@@ -22,12 +29,7 @@ func (c *coordsCommand) Synopsis() string {
 }
 
 func (c *coordsCommand) Run(args []string) int {
-	if len(args) == 0 {
-		fmt.Println("Missing filename argument")
-		return 1
-	}
-
-	data, err := readInput(args[len(args)-1])
+	data, err := readInput(args)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -43,31 +45,37 @@ func (c *coordsCommand) Run(args []string) int {
 	return 0
 }
 
-type compressCommand struct {
-	Count int
+func reducePointsAction() (cli.Command, error) {
+	return &reducePointsCommand{}, nil
 }
 
-func (c *compressCommand) Help() string {
+type reducePointsCommand struct {
+	count int
+}
+
+func (c *reducePointsCommand) Help() string {
+	return "Usage: gpx reduce-points [OPTIONS] FILENAME\n\n" +
+		"Options:\n" +
+		"  --count=N     Use N coordinates (default 2)\n"
+}
+
+func (c *reducePointsCommand) Synopsis() string {
 	return "Compress a GPX file by reducing the number of points"
 }
 
-func (c *compressCommand) Synopsis() string {
-	return "Compress a GPX file by reducing the number of points"
-}
+func (c *reducePointsCommand) Run(args []string) int {
+	// Parse command line flags
+	flags := flag.NewFlagSet("reduce-points", flag.ContinueOnError)
+	flags.IntVar(&c.count, "count", 2, "Use N coordinates")
+	flags.Parse(args)
 
-func (c *compressCommand) Run(args []string) int {
-	if len(args) == 0 {
-		fmt.Println("Missing filename argument")
-		return 1
-	}
-
-	data, err := readInput(args[len(args)-1])
+	data, err := readInput(flag.Args())
 	if err != nil {
 		fmt.Println(err)
 		return 1
 	}
 
-	result, err := compress.Compress(data, c.Count)
+	result, err := compress.Compress(data, c.count)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -77,37 +85,37 @@ func (c *compressCommand) Run(args []string) int {
 	return 0
 }
 
-func (c *compressCommand) Flags() *flag.FlagSet {
-	fs := flag.NewFlagSet("compress", flag.ContinueOnError)
-	fs.IntVar(&c.Count, "count", 2, "Number of points to keep in the compressed file")
-	return fs
+func reducePrecisionAction() (cli.Command, error) {
+	return &reducePrecisionCommand{}, nil
 }
 
-type truncateCommand struct {
-	Precision int
+type reducePrecisionCommand struct {
+	precision int
 }
 
-func (c *truncateCommand) Help() string {
-	return "Truncate the precision of a GPX file's lat/lon values"
+func (c *reducePrecisionCommand) Help() string {
+	return "Usage: gpx reduce-precisionAME]\n\n" +
+		"Options:\n" +
+		"  --precision=N Set precision to N decimal places (default 2)"
 }
 
-func (c *truncateCommand) Synopsis() string {
-	return "Truncate the precision of a GPX file's lat/lon values"
+func (c *reducePrecisionCommand) Synopsis() string {
+	return "Reduce the precision of a GPX file's lat/lon values"
 }
 
-func (c *truncateCommand) Run(args []string) int {
-	if len(args) == 0 {
-		fmt.Println("Missing filename argument")
-		return 1
-	}
+func (c *reducePrecisionCommand) Run(args []string) int {
+	// Parse command line flags
+	flags := flag.NewFlagSet("reduce-precision", flag.ContinueOnError)
+	flags.IntVar(&c.precision, "precision", 2, "Set precision to N decimal places")
+	flags.Parse(args)
 
-	data, err := readInput(args[len(args)-1])
+	data, err := readInput(flags.Args())
 	if err != nil {
 		fmt.Println(err)
 		return 1
 	}
 
-	result, err := truncate.Truncate(data, c.Precision)
+	result, err := truncate.Truncate(data, c.precision)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -117,37 +125,71 @@ func (c *truncateCommand) Run(args []string) int {
 	return 0
 }
 
-func (c *truncateCommand) Flags() *flag.FlagSet {
-	fs := flag.NewFlagSet("truncate", flag.ContinueOnError)
-	fs.IntVar(&c.Precision, "precision", 6, "Number of decimal places to truncate the lat/lon values to")
-	return fs
-}
-
-func readInput(filename string) ([]byte, error) {
+func readInput(args []string) ([]byte, error) {
 	var data []byte
 	var err error
 
-	// check if input is being piped in via stdin
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		data, err = ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	} else {
-		file, err := os.Open(filename)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		defer file.Close()
+	useStdin, err := hasStdinAvailable()
+	if err != nil {
+		return data, err
+	}
 
-		data, err = ioutil.ReadAll(file)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+	if useStdin {
+		return readInputFromStdin()
+	}
+
+	if len(args) <= 0 {
+		return data, errors.New("No filename specified and no data received on stdin.")
+	}
+	filename := args[len(args)-1]
+	return readInputFromFilename(filename)
+}
+
+func hasStdinAvailable() (bool, error) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false, err
+	}
+	return (stat.Mode() & os.ModeCharDevice) == 0, nil
+}
+
+func readInputFromStdin() ([]byte, error) {
+	data, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func readInputFromFilename(filename string) ([]byte, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	return data, err
+}
+
+func main() {
+	c := cli.NewCLI("gpx", "1.0.0")
+	c.Args = os.Args[1:]
+	c.Commands = map[string]cli.CommandFactory{
+		"json-coords":   coordsAction,
+		"reduce-points": reducePointsAction,
+		"reduce-precision": reducePrecisionAction,
+	}
+
+	exitStatus, err := c.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	os.Exit(exitStatus)
 }

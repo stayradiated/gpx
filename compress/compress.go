@@ -7,7 +7,7 @@ import (
 )
 
 type Gpx struct {
-	XMLName xml.Name `xml:"http://www.topografix.com/GPX/1/1 gpx"`
+	XMLName xml.Name `xml:"gpx"`
 	Trk     Trk      `xml:"trk"`
 }
 
