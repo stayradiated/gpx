@@ -18,11 +18,11 @@ func fromTomlAction() (cli.Command, error) {
 type fromTomlCommand struct{}
 
 func (c *fromTomlCommand) Help() string {
-	return "Usage: gpx json-coords [FILENAME]"
+	return "Usage: gpx from-toml [FILENAME]"
 }
 
 func (c *fromTomlCommand) Synopsis() string {
-	return "Extract coordinates from a GPX file"
+	return "Convert a TOML file into a GPX file"
 }
 
 func (c *fromTomlCommand) Run(args []string) int {
