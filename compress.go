@@ -1,4 +1,4 @@
-package compress
+package main
 
 import (
 	"encoding/xml"
@@ -6,41 +6,19 @@ import (
 	"math"
 )
 
-type Gpx struct {
-	XMLName xml.Name `xml:"gpx"`
-	Trk     Trk      `xml:"trk"`
-}
-
-type Trk struct {
-	Name  string    `xml:"name"`
-	Type  string    `xml:"type"`
-	Segs  []Trkseg  `xml:"trkseg"`
-}
-
-type Trkseg struct {
-	Points []Trkpt `xml:"trkpt"`
-}
-
-type Trkpt struct {
-	Lat float64 `xml:"lat,attr"`
-	Lon float64 `xml:"lon,attr"`
-	Ele float64 `xml:"ele"`
-}
-
 func Compress(data []byte, count int) (string, error) {
-	var gpx Gpx
+	var gpx GPX
 	var err error
 
-  err = xml.Unmarshal(data, &gpx)
+	err = xml.Unmarshal(data, &gpx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for i, seg := range gpx.Trk.Segs {
-		if len(seg.Points) > count {
-			seg.Points = compress(seg.Points, count)
-			gpx.Trk.Segs[i] = seg
-		}
+	seg := gpx.Track.Segment
+	if len(seg.Points) > count {
+		seg.Points = compress(seg.Points, count)
+		gpx.Track.Segment = seg
 	}
 
 	output, err := xml.MarshalIndent(gpx, "", "    ")
@@ -51,8 +29,8 @@ func Compress(data []byte, count int) (string, error) {
 	return string(output), err
 }
 
-func compress(points []Trkpt, count int) []Trkpt {
-	newPoints := make([]Trkpt, count)
+func compress(points []GPXTrackPoint, count int) []GPXTrackPoint {
+	newPoints := make([]GPXTrackPoint, count)
 
 	// always include first and last point
 	newPoints[0] = points[0]

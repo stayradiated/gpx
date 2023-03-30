@@ -9,10 +9,38 @@ import (
 	"os"
 
 	"github.com/mitchellh/cli"
-	"github.com/stayradiated/gpx/compress"
-	"github.com/stayradiated/gpx/coords"
-	"github.com/stayradiated/gpx/truncate"
 )
+
+func fromTomlAction() (cli.Command, error) {
+	return &fromTomlCommand{}, nil
+}
+
+type fromTomlCommand struct{}
+
+func (c *fromTomlCommand) Help() string {
+	return "Usage: gpx json-coords [FILENAME]"
+}
+
+func (c *fromTomlCommand) Synopsis() string {
+	return "Extract coordinates from a GPX file"
+}
+
+func (c *fromTomlCommand) Run(args []string) int {
+	data, err := readInput(args)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+
+	result, err := ConvertToGpx(data)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+
+	fmt.Println(result)
+	return 0
+}
 
 func coordsAction() (cli.Command, error) {
 	return &coordsCommand{}, nil
@@ -21,7 +49,7 @@ func coordsAction() (cli.Command, error) {
 type coordsCommand struct{}
 
 func (c *coordsCommand) Help() string {
-  return "Usage: gpx json-coords [FILENAME]"
+	return "Usage: gpx json-coords [FILENAME]"
 }
 
 func (c *coordsCommand) Synopsis() string {
@@ -35,7 +63,7 @@ func (c *coordsCommand) Run(args []string) int {
 		return 1
 	}
 
-	result, err := coords.Coords(data)
+	result, err := Coords(data)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -75,7 +103,7 @@ func (c *reducePointsCommand) Run(args []string) int {
 		return 1
 	}
 
-	result, err := compress.Compress(data, c.count)
+	result, err := Compress(data, c.count)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -115,7 +143,7 @@ func (c *reducePrecisionCommand) Run(args []string) int {
 		return 1
 	}
 
-	result, err := truncate.Truncate(data, c.precision)
+	result, err := Truncate(data, c.precision)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -181,8 +209,9 @@ func main() {
 	c := cli.NewCLI("gpx", "1.0.0")
 	c.Args = os.Args[1:]
 	c.Commands = map[string]cli.CommandFactory{
-		"json-coords":   coordsAction,
-		"reduce-points": reducePointsAction,
+		"json-coords":      coordsAction,
+		"from-toml":        fromTomlAction,
+		"reduce-points":    reducePointsAction,
 		"reduce-precision": reducePrecisionAction,
 	}
 
